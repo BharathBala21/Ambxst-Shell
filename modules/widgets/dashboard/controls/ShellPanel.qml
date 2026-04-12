@@ -1689,6 +1689,85 @@ Item {
                             }
                         }
 
+                        ToggleRow {
+                            label: "Visualizer"
+                            checked: Config.desktop.visualizer.enabled ?? false
+                            onToggled: value => {
+                                if (value !== Config.desktop.visualizer.enabled) {
+                                    GlobalStates.markShellChanged();
+                                    Config.desktop.visualizer.enabled = value;
+                                }
+                            }
+                        }
+
+                        NumberInputRow {
+                            label: "Visualizer Height"
+                            value: Config.desktop.visualizer.height ?? 220
+                            minValue: 48
+                            maxValue: 720
+                            suffix: "px"
+                            onValueEdited: newValue => {
+                                if (newValue !== Config.desktop.visualizer.height) {
+                                    GlobalStates.markShellChanged();
+                                    Config.desktop.visualizer.height = newValue;
+                                }
+                            }
+                        }
+
+                        NumberInputRow {
+                            label: "Bar Width"
+                            value: Config.desktop.visualizer.barWidth ?? 18
+                            minValue: 2
+                            maxValue: 64
+                            suffix: "px"
+                            onValueEdited: newValue => {
+                                if (newValue !== Config.desktop.visualizer.barWidth) {
+                                    GlobalStates.markShellChanged();
+                                    Config.desktop.visualizer.barWidth = newValue;
+                                }
+                            }
+                        }
+
+                        NumberInputRow {
+                            label: "Bar Spacing"
+                            value: Config.desktop.visualizer.barSpacing ?? 10
+                            minValue: 0
+                            maxValue: 40
+                            suffix: "px"
+                            onValueEdited: newValue => {
+                                if (newValue !== Config.desktop.visualizer.barSpacing) {
+                                    GlobalStates.markShellChanged();
+                                    Config.desktop.visualizer.barSpacing = newValue;
+                                }
+                            }
+                        }
+
+                        NumberInputRow {
+                            label: "Opacity"
+                            value: Math.round((Config.desktop.visualizer.opacity ?? 0.9) * 100)
+                            minValue: 0
+                            maxValue: 100
+                            suffix: "%"
+                            onValueEdited: newValue => {
+                                const opacity = newValue / 100;
+                                if (opacity !== Config.desktop.visualizer.opacity) {
+                                    GlobalStates.markShellChanged();
+                                    Config.desktop.visualizer.opacity = opacity;
+                                }
+                            }
+                        }
+
+                        ToggleRow {
+                            label: "Mirror Bars"
+                            checked: Config.desktop.visualizer.mirror ?? true
+                            onToggled: value => {
+                                if (value !== Config.desktop.visualizer.mirror) {
+                                    GlobalStates.markShellChanged();
+                                    Config.desktop.visualizer.mirror = value;
+                                }
+                            }
+                        }
+
                         // Text Color with ColorButton
                         RowLayout {
                             Layout.fillWidth: true
@@ -1716,6 +1795,37 @@ Item {
                                         if (color !== Config.desktop.textColor) {
                                             GlobalStates.markShellChanged();
                                             Config.desktop.textColor = color;
+                                        }
+                                    });
+                                }
+                            }
+                        }
+
+                        RowLayout {
+                            Layout.fillWidth: true
+                            spacing: 8
+
+                            Text {
+                                text: "Visualizer Color"
+                                font.family: Config.theme.font
+                                font.pixelSize: Styling.fontSize(0)
+                                color: Colors.overBackground
+                                Layout.preferredWidth: 100
+                            }
+
+                            ColorButton {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 48
+                                colorNames: root.colorNames
+                                currentColor: Config.desktop.visualizer.color ?? "primary"
+                                dialogTitle: "Visualizer Color"
+                                compact: false
+
+                                onOpenColorPicker: (colorNames, currentColor, dialogTitle) => {
+                                    root.openColorPicker(colorNames, currentColor, dialogTitle, function (color) {
+                                        if (color !== Config.desktop.visualizer.color) {
+                                            GlobalStates.markShellChanged();
+                                            Config.desktop.visualizer.color = color;
                                         }
                                     });
                                 }

@@ -883,6 +883,18 @@ Singleton {
             property int iconSize: 40
             property int spacingVertical: 16
             property string textColor: "overBackground"
+            property JsonObject visualizer: JsonObject {
+                property bool enabled: false
+                property int height: 220
+                property real opacity: 0.9
+                property int barWidth: 18
+                property int barSpacing: 10
+                property int barRadius: 10
+                property int maxValue: 1000
+                property real smoothing: 0.35
+                property string color: "primary"
+                property bool mirror: true
+            }
         }
     }
 

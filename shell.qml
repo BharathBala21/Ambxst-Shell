@@ -54,7 +54,7 @@ ShellRoot {
 
         Loader {
             id: desktopLoader
-            active: Config.desktop.enabled && SuspendManager.wakeReady
+            active: SuspendManager.wakeReady && ((Config.desktop.enabled ?? false) || (Config.desktop.visualizer.enabled ?? false))
             required property ShellScreen modelData
             sourceComponent: Desktop {
                 screen: desktopLoader.modelData

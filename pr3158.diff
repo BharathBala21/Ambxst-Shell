@@ -1,0 +1,1200 @@
+diff --git a/dots/.config/quickshell/ii/modules/common/Config.qml b/dots/.config/quickshell/ii/modules/common/Config.qml
+index cf8fc20321..8e4376c4b5 100644
+--- a/dots/.config/quickshell/ii/modules/common/Config.qml
++++ b/dots/.config/quickshell/ii/modules/common/Config.qml
+@@ -209,6 +209,24 @@ Singleton {
+                         property real x: 400
+                         property real y: 100
+                     }
++                    property JsonObject visualizer: JsonObject {
++                        property bool enable: false
++                        property bool showWhenLocked: false
++                        property bool hideWhenCovered: true
++                        property bool hideWhenFullscreen: true
++                        property int height: 600 // in pixels
++                        property real barRounding: 0.5
++                        property real smoothing: 0.05
++                        property real opacity: 1
++                        property real barSpacing: 10 // in pixels
++                        property int targetBarWidth: 50 // in pixles, rough target
++                        property bool mono: true
++                        property string mode: "bars" // "bars" or "wave"
++                        property real waveFillOpacity: 0.5
++                        property real dataSmoothing: 0.5
++                        property int waveBorderWidth: 3    // 0 = no border
++                        property int renderEveryXFrames: -1  // -1 = auto (System), 1 = every frame, 2 = every other frame, etc. Only for "wave" mode
++                    }
+                 }
+                 property string wallpaperPath: ""
+                 property string thumbnailPath: ""
+diff --git a/dots/.config/quickshell/ii/modules/ii/background/Background.qml b/dots/.config/quickshell/ii/modules/ii/background/Background.qml
+index 0c1f1c0f7c..587d706fd7 100644
+--- a/dots/.config/quickshell/ii/modules/ii/background/Background.qml
++++ b/dots/.config/quickshell/ii/modules/ii/background/Background.qml
+@@ -5,6 +5,7 @@ import qs.services
+ import qs.modules.common
+ import qs.modules.common.widgets
+ import qs.modules.common.widgets.widgetCanvas
++import qs.modules.ii.background.widgets.visualizer
+ import qs.modules.common.functions as CF
+ import QtQuick
+ import QtQuick.Layouts
+@@ -17,267 +18,371 @@ import Quickshell.Hyprland
+ import qs.modules.ii.background.widgets
+ import qs.modules.ii.background.widgets.clock
+ import qs.modules.ii.background.widgets.weather
++import qs.modules.common.models.hyprland
+ 
+-Variants {
++Scope {
+     id: root
+-    model: Quickshell.screens
+-
+-    PanelWindow {
+-        id: bgRoot
+-
+-        required property var modelData
+-
+-        // Hide when fullscreen
+-        property list<HyprlandWorkspace> workspacesForMonitor: Hyprland.workspaces.values.filter(workspace => workspace.monitor && workspace.monitor.name == monitor.name)
+-        property var activeWorkspaceWithFullscreen: workspacesForMonitor.filter(workspace => ((workspace.toplevels.values.filter(window => window.wayland?.fullscreen)[0] != undefined) && workspace.active))[0]
+-        visible: GlobalStates.screenLocked || (!(activeWorkspaceWithFullscreen != undefined)) || !Config?.options.background.hideWhenFullscreen
+-
+-        // Workspaces
+-        property HyprlandMonitor monitor: Hyprland.monitorFor(modelData)
+-        property list<var> relevantWindows: HyprlandData.windowList.filter(win => win.monitor == monitor?.id && win.workspace.id >= 0).sort((a, b) => a.workspace.id - b.workspace.id)
+-        property int firstWorkspaceId: relevantWindows[0]?.workspace.id || 1
+-        property int lastWorkspaceId: relevantWindows[relevantWindows.length - 1]?.workspace.id || 10
+-        property int workspaceChunkSize: Config?.options.bar.workspaces.shown ?? 10
+-        property int totalWorkspaces: Math.ceil(lastWorkspaceId / workspaceChunkSize) * workspaceChunkSize
+-        // Wallpaper
+-        property bool wallpaperIsVideo: Config.options.background.wallpaperPath.endsWith(".mp4") || Config.options.background.wallpaperPath.endsWith(".webm") || Config.options.background.wallpaperPath.endsWith(".mkv") || Config.options.background.wallpaperPath.endsWith(".avi") || Config.options.background.wallpaperPath.endsWith(".mov")
+-        property string wallpaperPath: wallpaperIsVideo ? Config.options.background.thumbnailPath : Config.options.background.wallpaperPath
+-        property bool wallpaperSafetyTriggered: {
+-            const enabled = Config.options.workSafety.enable.wallpaper;
+-            const sensitiveWallpaper = (CF.StringUtils.stringListContainsSubstring(wallpaperPath.toLowerCase(), Config.options.workSafety.triggerCondition.fileKeywords));
+-            const sensitiveNetwork = (CF.StringUtils.stringListContainsSubstring(Network.networkName.toLowerCase(), Config.options.workSafety.triggerCondition.networkNameKeywords));
+-            return enabled && sensitiveWallpaper && sensitiveNetwork;
+-        }
+-        readonly property real parallaxRation: Config.options.background.parallax.workspaceZoom
+-        property real minSuitableScale: 1 // Some reasonable init, to be updated
+-        property real effectiveWallpaperScale: minSuitableScale * parallaxRation
+-        property int wallpaperWidth: modelData.width // Some reasonable init value, to be updated
+-        property int wallpaperHeight: modelData.height // Some reasonable init value, to be updated
+-        property real scaledWallpaperWidth: wallpaperWidth * effectiveWallpaperScale
+-        property real scaledWallpaperHeight: wallpaperHeight * effectiveWallpaperScale
+-        property real parallaxTotalPixelsX: Math.max(0, scaledWallpaperWidth - screen.width)
+-        property real parallaxTotalPixelsY: Math.max(0, scaledWallpaperHeight - screen.height)
+-        readonly property bool verticalParallax: (Config.options.background.parallax.autoVertical && wallpaperHeight > wallpaperWidth) || Config.options.background.parallax.vertical
+-        // Colors
+-        property bool shouldBlur: (GlobalStates.screenLocked && Config.options.lock.blur.enable)
+-        property color dominantColor: Appearance.colors.colPrimary // Default, to be changed
+-        property bool dominantColorIsDark: dominantColor.hslLightness < 0.5
+-        property color colText: {
+-            if (wallpaperSafetyTriggered)
+-                return CF.ColorUtils.mix(Appearance.colors.colOnLayer0, Appearance.colors.colPrimary, 0.75);
+-            return (GlobalStates.screenLocked && shouldBlur) ? Appearance.colors.colOnLayer0 : CF.ColorUtils.colorWithLightness(Appearance.colors.colPrimary, (dominantColorIsDark ? 0.8 : 0.12));
+-        }
+-        Behavior on colText {
+-            animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
+-        }
+ 
+-        // Layer props
+-        screen: modelData
+-        exclusionMode: ExclusionMode.Ignore
+-        WlrLayershell.layer: (GlobalStates.screenLocked && !scaleAnim.running) ? WlrLayer.Overlay : WlrLayer.Bottom
+-        // WlrLayershell.layer: WlrLayer.Bottom
+-        WlrLayershell.namespace: "quickshell:background"
+-        anchors {
+-            top: true
+-            bottom: true
+-            left: true
+-            right: true
+-        }
+-        color: {
+-            if (!bgRoot.wallpaperSafetyTriggered || bgRoot.wallpaperIsVideo)
+-                return "transparent";
+-            return CF.ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colPrimary, 0.75);
+-        }
+-        Behavior on color {
+-            animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
+-        }
++    property list<real> visualizerPoints: Array.from({length: 50}, () => 0)
+ 
+-        onWallpaperPathChanged: {
+-            bgRoot.updateZoomScale();
+-            // Clock position gets updated after zoom scale is updated
+-        }
++    // Helper function to check if a specific monitor is showing background/visualizer
++    function isMonitorShowingBackground(monitor) {
++        if (!monitor || !monitor.activeWorkspace) return true;
+ 
+-        // Wallpaper zoom scale
+-        function updateZoomScale() {
+-            getWallpaperSizeProc.path = bgRoot.wallpaperPath;
+-            getWallpaperSizeProc.running = true;
+-        }
+-        Process {
+-            id: getWallpaperSizeProc
+-            property string path: bgRoot.wallpaperPath
+-            command: ["magick", "identify", "-format", "%w %h", path]
+-            stdout: StdioCollector {
+-                id: wallpaperSizeOutputCollector
+-                onStreamFinished: {
+-                    const output = wallpaperSizeOutputCollector.text;
+-                    const [width, height] = output.split(" ").map(Number);
+-                    const [screenWidth, screenHeight] = [bgRoot.screen.width, bgRoot.screen.height];
+-                    bgRoot.wallpaperWidth = width;
+-                    bgRoot.wallpaperHeight = height;
+-
+-                    // Perfect image; scale = 1
+-                    // Small picture; scale > 1; will zoom in the picture
+-                    // Big picture; scale < 1; will zoom out the picture
+-                    // Choose max number so every side will fit
+-                    bgRoot.minSuitableScale = Math.max(screenWidth / width, screenHeight / height);
++        let coveringCount = 0;
++        let hasFullscreen = false;
++
++        HyprlandData.windowList.forEach(win => {
++            const winWsId = win.workspace?.id ?? win.workspace;
++            if (win.monitor == monitor.id && winWsId == monitor.activeWorkspace.id) {
++                const isMax = (win.maximized || win.wayland?.maximized);
++                const isFS = (win.fullscreen || win.wayland?.fullscreen);
++
++                if (win.floating === false || isMax || isFS) {
++                    coveringCount++;
++                    if (isFS) hasFullscreen = true;
+                 }
+             }
++        });
++
++        const hideCovered = Config?.options?.background?.widgets?.visualizer?.hideWhenCovered ?? true;
++        const hideFull = Config?.options?.background?.widgets?.visualizer?.hideWhenFullscreen ?? true;
++
++        if (hideCovered && coveringCount > 0) return false;
++        if (hideFull && hasFullscreen) return false;
++        return true;
++    }
++
++    readonly property bool isVisualizerNeeded: {
++        if (!(Config?.options?.background?.widgets?.visualizer?.enable ?? false)) return false;
++
++        return Quickshell.screens.some(screen => {
++            const monitor = Hyprland.monitorFor(screen);
++            if (!monitor) return false;
++
++            if (GlobalStates.screenLocked) {
++                return Config?.options?.background?.widgets?.visualizer?.showWhenLocked ?? true;
++            }
++
++            return root.isMonitorShowingBackground(monitor);
++        });
++    }
++
++    // Cava process
++    Process {
++        id: cavaProc
++        running: (Config?.options?.background?.widgets?.visualizer?.enable ?? false) && root.isVisualizerNeeded && enableAnimations.value
++        onRunningChanged: {
++            if (!cavaProc.running)
++                root.visualizerPoints = Array.from({length: 50}, () => 0);
++        }
++        command: ["cava", "-p", `${CF.FileUtils.trimFileProtocol(Directories.scriptPath)}/cava/raw_output_config.txt`]
++        stdout: SplitParser {
++            onRead: data => {
++                const points = data.split(";").map(p => parseFloat(p.trim())).filter(p => !isNaN(p));
++                if (points.length > 0)
++                    root.visualizerPoints = points;
++            }
+         }
++    }
++
++    HyprlandConfigOption {
++        id: enableAnimations
++        key: "animations:enabled"
++    }
++
++    Variants {
++        model: Quickshell.screens
++
++        PanelWindow {
++            id: bgRoot
+ 
+-        Item {
+-            anchors.fill: parent
++            required property var modelData
+ 
++            // Per-monitor background visibility
++            readonly property bool isBackgroundVisible: {
++                if (GlobalStates.screenLocked) return true;
++                return root.isMonitorShowingBackground(monitor);
++            }
++
++            // Hide when fullscreen
++            property list<HyprlandWorkspace> workspacesForMonitor: Hyprland.workspaces.values.filter(workspace => workspace.monitor && workspace.monitor.name == monitor.name)
++            property var activeWorkspaceWithFullscreen: workspacesForMonitor.filter(workspace => ((workspace.toplevels.values.filter(window => window.wayland?.fullscreen)[0] != undefined) && workspace.active))[0]
++            visible: GlobalStates.screenLocked || (!(activeWorkspaceWithFullscreen != undefined)) || !Config?.options.background.hideWhenFullscreen
++
++            // Workspaces
++            property HyprlandMonitor monitor: Hyprland.monitorFor(modelData)
++            property list<var> relevantWindows: HyprlandData.windowList.filter(win => win.monitor == monitor?.id && win.workspace.id >= 0).sort((a, b) => a.workspace.id - b.workspace.id)
++            property int firstWorkspaceId: relevantWindows[0]?.workspace.id || 1
++            property int lastWorkspaceId: relevantWindows[relevantWindows.length - 1]?.workspace.id || 10
++            property int workspaceChunkSize: Config?.options.bar.workspaces.shown ?? 10
++            property int totalWorkspaces: Math.ceil(lastWorkspaceId / workspaceChunkSize) * workspaceChunkSize
+             // Wallpaper
+-            StyledImage {
+-                id: wallpaper
+-                visible: opacity > 0 && !blurLoader.active
+-                opacity: (status === Image.Ready && !bgRoot.wallpaperIsVideo) ? 1 : 0
+-                cache: false
+-                smooth: false
+-
+-                property int workspaceIndex: (bgRoot.monitor.activeWorkspace?.id ?? 1) - 1
+-                property real middleFraction: 0.5
+-                property real fraction: {
+-                    // 0 - start of the picture
+-                    // 1 - end of the picture
+-                    if (bgRoot.totalWorkspaces <= 1) {
+-                        return middleFraction;
++            property bool wallpaperIsVideo: Config.options.background.wallpaperPath.endsWith(".mp4") || Config.options.background.wallpaperPath.endsWith(".webm") || Config.options.background.wallpaperPath.endsWith(".mkv") || Config.options.background.wallpaperPath.endsWith(".avi") || Config.options.background.wallpaperPath.endsWith(".mov")
++            property string wallpaperPath: wallpaperIsVideo ? Config.options.background.thumbnailPath : Config.options.background.wallpaperPath
++            property bool wallpaperSafetyTriggered: {
++                const enabled = Config.options.workSafety.enable.wallpaper;
++                const sensitiveWallpaper = (CF.StringUtils.stringListContainsSubstring(wallpaperPath.toLowerCase(), Config.options.workSafety.triggerCondition.fileKeywords));
++                const sensitiveNetwork = (CF.StringUtils.stringListContainsSubstring(Network.networkName.toLowerCase(), Config.options.workSafety.triggerCondition.networkNameKeywords));
++                return enabled && sensitiveWallpaper && sensitiveNetwork;
++            }
++            readonly property real parallaxRation: Config.options.background.parallax.workspaceZoom
++            property real minSuitableScale: 1 // Some reasonable init, to be updated
++            property real effectiveWallpaperScale: minSuitableScale * parallaxRation
++            property int wallpaperWidth: modelData.width // Some reasonable init value, to be updated
++            property int wallpaperHeight: modelData.height // Some reasonable init value, to be updated
++            property real scaledWallpaperWidth: wallpaperWidth * effectiveWallpaperScale
++            property real scaledWallpaperHeight: wallpaperHeight * effectiveWallpaperScale
++            property real parallaxTotalPixelsX: Math.max(0, scaledWallpaperWidth - screen.width)
++            property real parallaxTotalPixelsY: Math.max(0, scaledWallpaperHeight - screen.height)
++            readonly property bool verticalParallax: (Config.options.background.parallax.autoVertical && wallpaperHeight > wallpaperWidth) || Config.options.background.parallax.vertical
++            // Colors
++            property bool shouldBlur: (GlobalStates.screenLocked && Config.options.lock.blur.enable)
++            property color dominantColor: Appearance.colors.colPrimary // Default, to be changed
++            property bool dominantColorIsDark: dominantColor.hslLightness < 0.5
++            property color colText: {
++                if (wallpaperSafetyTriggered)
++                    return CF.ColorUtils.mix(Appearance.colors.colOnLayer0, Appearance.colors.colPrimary, 0.75);
++                return (GlobalStates.screenLocked && shouldBlur) ? Appearance.colors.colOnLayer0 : CF.ColorUtils.colorWithLightness(Appearance.colors.colPrimary, (dominantColorIsDark ? 0.8 : 0.12));
++            }
++            Behavior on colText {
++                animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
++            }
++
++            // Layer props
++            screen: modelData
++            exclusionMode: ExclusionMode.Ignore
++            WlrLayershell.layer: (GlobalStates.screenLocked && !scaleAnim.running) ? WlrLayer.Overlay : WlrLayer.Bottom
++            // WlrLayershell.layer: WlrLayer.Bottom
++            WlrLayershell.namespace: "quickshell:background"
++            anchors {
++                top: true
++                bottom: true
++                left: true
++                right: true
++            }
++            color: {
++                if (!bgRoot.wallpaperSafetyTriggered || bgRoot.wallpaperIsVideo)
++                    return "transparent";
++                return CF.ColorUtils.mix(Appearance.colors.colLayer0, Appearance.colors.colPrimary, 0.75);
++            }
++            Behavior on color {
++                animation: Appearance.animation.elementMoveFast.colorAnimation.createObject(this)
++            }
++
++            onWallpaperPathChanged: {
++                bgRoot.updateZoomScale();
++                // Clock position gets updated after zoom scale is updated
++            }
++
++            // Wallpaper zoom scale
++            function updateZoomScale() {
++                getWallpaperSizeProc.path = bgRoot.wallpaperPath;
++                getWallpaperSizeProc.running = true;
++            }
++            Process {
++                id: getWallpaperSizeProc
++                property string path: bgRoot.wallpaperPath
++                command: ["magick", "identify", "-format", "%w %h", path]
++                stdout: StdioCollector {
++                    id: wallpaperSizeOutputCollector
++                    onStreamFinished: {
++                        const output = wallpaperSizeOutputCollector.text;
++                        const [width, height] = output.split(" ").map(Number);
++                        const [screenWidth, screenHeight] = [bgRoot.screen.width, bgRoot.screen.height];
++                        bgRoot.wallpaperWidth = width;
++                        bgRoot.wallpaperHeight = height;
++
++                        // Perfect image; scale = 1
++                        // Small picture; scale > 1; will zoom in the picture
++                        // Big picture; scale < 1; will zoom out the picture
++                        // Choose max number so every side will fit
++                        bgRoot.minSuitableScale = Math.max(screenWidth / width, screenHeight / height);
+                     }
+-                    return Math.max(0, Math.min(1, workspaceIndex / (bgRoot.totalWorkspaces - 1)));
+                 }
++            }
++
++            Item {
++                anchors.fill: parent
++
++                // Wallpaper
++                StyledImage {
++                    id: wallpaper
++                    visible: opacity > 0 && !blurLoader.active
++                    opacity: (status === Image.Ready && !bgRoot.wallpaperIsVideo) ? 1 : 0
++                    cache: false
++                    smooth: false
+ 
+-                property real usedFractionX: {
+-                    let usedFraction = middleFraction;
+-                    if (Config.options.background.parallax.enableWorkspace && !bgRoot.verticalParallax) {
+-                        usedFraction = fraction;
++                    property int workspaceIndex: (bgRoot.monitor.activeWorkspace?.id ?? 1) - 1
++                    property real middleFraction: 0.5
++                    property real fraction: {
++                        // 0 - start of the picture
++                        // 1 - end of the picture
++                        if (bgRoot.totalWorkspaces <= 1) {
++                            return middleFraction;
++                        }
++                        return Math.max(0, Math.min(1, workspaceIndex / (bgRoot.totalWorkspaces - 1)));
+                     }
+-                    if (Config.options.background.parallax.enableSidebar) {
+-                        let sidebarFraction = bgRoot.parallaxRation / bgRoot.workspaceChunkSize / 2;
+-                        usedFraction += (sidebarFraction * GlobalStates.sidebarRightOpen - sidebarFraction * GlobalStates.sidebarLeftOpen);
++
++                    property real usedFractionX: {
++                        let usedFraction = middleFraction;
++                        if (Config.options.background.parallax.enableWorkspace && !bgRoot.verticalParallax) {
++                            usedFraction = fraction;
++                        }
++                        if (Config.options.background.parallax.enableSidebar) {
++                            let sidebarFraction = bgRoot.parallaxRation / bgRoot.workspaceChunkSize / 2;
++                            usedFraction += (sidebarFraction * GlobalStates.sidebarRightOpen - sidebarFraction * GlobalStates.sidebarLeftOpen);
++                        }
++                        return Math.max(0, Math.min(1, usedFraction));
+                     }
+-                    return Math.max(0, Math.min(1, usedFraction));
+-                }
+-                property real usedFractionY: {
+-                    let usedFraction = middleFraction;
+-                    if (Config.options.background.parallax.enableWorkspace && bgRoot.verticalParallax) {
+-                        usedFraction = fraction;
++                    property real usedFractionY: {
++                        let usedFraction = middleFraction;
++                        if (Config.options.background.parallax.enableWorkspace && bgRoot.verticalParallax) {
++                            usedFraction = fraction;
++                        }
++                        return Math.max(0, Math.min(1, usedFraction));
+                     }
+-                    return Math.max(0, Math.min(1, usedFraction));
+-                }
+ 
+-                x: {
+-                    if (bgRoot.screen.width > width) {
+-                        // Center the picture
+-                        return (bgRoot.screen.width - width) / 2;
++                    x: {
++                        if (bgRoot.screen.width > width) {
++                            // Center the picture
++                            return (bgRoot.screen.width - width) / 2;
++                        }
++                        return - bgRoot.parallaxTotalPixelsX * usedFractionX;
+                     }
+-                    return - bgRoot.parallaxTotalPixelsX * usedFractionX;
+-                }
+-                y: {
+-                    if (bgRoot.screen.height > height) {
+-                        // Center the picture
+-                        return (bgRoot.screen.height - height) / 2;
++                    y: {
++                        if (bgRoot.screen.height > height) {
++                            // Center the picture
++                            return (bgRoot.screen.height - height) / 2;
++                        }
++                        return - bgRoot.parallaxTotalPixelsY * usedFractionY;
+                     }
+-                    return - bgRoot.parallaxTotalPixelsY * usedFractionY;
+-                }
+ 
+-                source: bgRoot.wallpaperSafetyTriggered ? "" : bgRoot.wallpaperPath
+-                fillMode: Image.PreserveAspectCrop
+-                Behavior on x {
+-                    NumberAnimation {
+-                        duration: 600
+-                        easing.type: Easing.OutCubic
++                    source: bgRoot.wallpaperSafetyTriggered ? "" : bgRoot.wallpaperPath
++                    fillMode: Image.PreserveAspectCrop
++                    Behavior on x {
++                        NumberAnimation {
++                            duration: 600
++                            easing.type: Easing.OutCubic
++                        }
+                     }
+-                }
+-                Behavior on y {
+-                    NumberAnimation {
+-                        duration: 600
+-                        easing.type: Easing.OutCubic
++                    Behavior on y {
++                        NumberAnimation {
++                            duration: 600
++                            easing.type: Easing.OutCubic
++                        }
++                    }
++                    sourceSize {
++                        width: bgRoot.scaledWallpaperWidth
++                        height: bgRoot.scaledWallpaperHeight
+                     }
+-                }
+-                sourceSize {
+                     width: bgRoot.scaledWallpaperWidth
+                     height: bgRoot.scaledWallpaperHeight
+                 }
+-                width: bgRoot.scaledWallpaperWidth
+-                height: bgRoot.scaledWallpaperHeight
+-            }
+ 
+-            Loader {
+-                id: blurLoader
+-                active: Config.options.lock.blur.enable && (GlobalStates.screenLocked || scaleAnim.running)
+-                anchors.fill: wallpaper
+-                scale: GlobalStates.screenLocked ? Config.options.lock.blur.extraZoom : 1
+-                Behavior on scale {
+-                    NumberAnimation {
+-                        id: scaleAnim
+-                        duration: 400
+-                        easing.type: Easing.BezierSpline
+-                        easing.bezierCurve: Appearance.animationCurves.expressiveDefaultSpatial
++                Loader {
++                    id: blurLoader
++                    active: Config.options.lock.blur.enable && (GlobalStates.screenLocked || scaleAnim.running)
++                    anchors.fill: wallpaper
++                    scale: GlobalStates.screenLocked ? Config.options.lock.blur.extraZoom : 1
++                    Behavior on scale {
++                        NumberAnimation {
++                            id: scaleAnim
++                            duration: 400
++                            easing.type: Easing.BezierSpline
++                            easing.bezierCurve: Appearance.animationCurves.expressiveDefaultSpatial
++                        }
+                     }
+-                }
+-                sourceComponent: GaussianBlur {
+-                    source: wallpaper
+-                    radius: GlobalStates.screenLocked ? Config.options.lock.blur.radius : 0
+-                    samples: radius * 2 + 1
++                    sourceComponent: GaussianBlur {
++                        source: wallpaper
++                        radius: GlobalStates.screenLocked ? Config.options.lock.blur.radius : 0
++                        samples: radius * 2 + 1
+ 
+-                    Rectangle {
+-                        opacity: GlobalStates.screenLocked ? 1 : 0
+-                        anchors.fill: parent
+-                        color: CF.ColorUtils.transparentize(Appearance.colors.colLayer0, 0.7)
++                        Rectangle {
++                            opacity: GlobalStates.screenLocked ? 1 : 0
++                            anchors.fill: parent
++                            color: CF.ColorUtils.transparentize(Appearance.colors.colLayer0, 0.7)
++                        }
+                     }
+                 }
+-            }
+ 
+-            WidgetCanvas {
+-                id: widgetCanvas
+-                width: parent.width
+-                height: parent.height
+-                readonly property real parallaxFactor: {
+-                    var f = Config.options.background.parallax.widgetsFactor;
+-                    return f / bgRoot.parallaxRation;
+-                }
+-                readonly property real baseWallpaperOffsetX: (bgRoot.screen.width - wallpaper.width) / 2
+-                readonly property real baseWallpaperOffsetY: (bgRoot.screen.height - wallpaper.height) / 2
+-                readonly property real wallpaperTotalOffsetX: wallpaper.x - baseWallpaperOffsetX
+-                readonly property real wallpaperTotalOffsetY: wallpaper.y - baseWallpaperOffsetY
+-                readonly property bool locked: GlobalStates.screenLocked
+-                x: wallpaperTotalOffsetX * parallaxFactor * !locked
+-                y: wallpaperTotalOffsetY * parallaxFactor * !locked
+-
+-                transitions: Transition {
+-                    PropertyAnimation {
+-                        properties: "width,height"
+-                        duration: Appearance.animation.elementMove.duration
+-                        easing.type: Appearance.animation.elementMove.type
+-                        easing.bezierCurve: Appearance.animation.elementMove.bezierCurve
++                WidgetCanvas {
++                    id: widgetCanvas
++                    width: parent.width
++                    height: parent.height
++                    readonly property real parallaxFactor: {
++                        var f = Config.options.background.parallax.widgetsFactor;
++                        return f / bgRoot.parallaxRation;
+                     }
+-                    AnchorAnimation {
+-                        duration: Appearance.animation.elementMove.duration
+-                        easing.type: Appearance.animation.elementMove.type
+-                        easing.bezierCurve: Appearance.animation.elementMove.bezierCurve
++                    readonly property real baseWallpaperOffsetX: (bgRoot.screen.width - wallpaper.width) / 2
++                    readonly property real baseWallpaperOffsetY: (bgRoot.screen.height - wallpaper.height) / 2
++                    readonly property real wallpaperTotalOffsetX: wallpaper.x - baseWallpaperOffsetX
++                    readonly property real wallpaperTotalOffsetY: wallpaper.y - baseWallpaperOffsetY
++                    readonly property bool locked: GlobalStates.screenLocked
++                    x: wallpaperTotalOffsetX * parallaxFactor * !locked
++                    y: wallpaperTotalOffsetY * parallaxFactor * !locked
++
++                    transitions: Transition {
++                        PropertyAnimation {
++                            properties: "width,height"
++                            duration: Appearance.animation.elementMove.duration
++                            easing.type: Appearance.animation.elementMove.type
++                            easing.bezierCurve: Appearance.animation.elementMove.bezierCurve
++                        }
++                        AnchorAnimation {
++                            duration: Appearance.animation.elementMove.duration
++                            easing.type: Appearance.animation.elementMove.type
++                            easing.bezierCurve: Appearance.animation.elementMove.bezierCurve
++                        }
+                     }
+-                }
+ 
+-                FadeLoader {
+-                    shown: Config.options.background.widgets.weather.enable
+-                    sourceComponent: WeatherWidget {
+-                        screenWidth: bgRoot.screen.width
+-                        screenHeight: bgRoot.screen.height
+-                        scaledScreenWidth: bgRoot.screen.width
+-                        scaledScreenHeight: bgRoot.screen.height
+-                        wallpaperScale: 1
++                    FadeLoader {
++                        shown: Config.options.background.widgets.weather.enable
++                        sourceComponent: WeatherWidget {
++                            screenWidth: bgRoot.screen.width
++                            screenHeight: bgRoot.screen.height
++                            scaledScreenWidth: bgRoot.screen.width
++                            scaledScreenHeight: bgRoot.screen.height
++                            wallpaperScale: 1
++                        }
++                    }
++
++                    FadeLoader {
++                        shown: Config.options.background.widgets.clock.enable
++                        sourceComponent: ClockWidget {
++                            screenWidth: bgRoot.screen.width
++                            screenHeight: bgRoot.screen.height
++                            scaledScreenWidth: bgRoot.screen.width
++                            scaledScreenHeight: bgRoot.screen.height
++                            wallpaperScale: 1
++                            wallpaperSafetyTriggered: bgRoot.wallpaperSafetyTriggered
++                        }
+                     }
+                 }
+ 
+                 FadeLoader {
+-                    shown: Config.options.background.widgets.clock.enable
+-                    sourceComponent: ClockWidget {
+-                        screenWidth: bgRoot.screen.width
+-                        screenHeight: bgRoot.screen.height
++                    id: visualizerLoader
++                    z: 0
++
++                    anchors {
++                        left: parent.left
++                        right: parent.right
++                        bottom: parent.bottom
++                    }
++                    height: Config.options.background.widgets.visualizer.height
++
++                    readonly property var vizConfig: Config?.options?.background?.widgets?.visualizer
++                    shown: vizConfig?.enable && bgRoot.isBackgroundVisible && (!GlobalStates.screenLocked || vizConfig?.showWhenLocked)
++
++                    sourceComponent: VisualizerWidget {
++                        anchors.fill: parent
++
++                        points: root.visualizerPoints
++                        primaryColor: Appearance.colors.colPrimary
++                        shown: visualizerLoader.shown
++
+                         scaledScreenWidth: bgRoot.screen.width
+                         scaledScreenHeight: bgRoot.screen.height
+-                        wallpaperScale: 1
+-                        wallpaperSafetyTriggered: bgRoot.wallpaperSafetyTriggered
+                     }
+                 }
+             }
+diff --git a/dots/.config/quickshell/ii/modules/ii/background/widgets/PinnedWidget.qml b/dots/.config/quickshell/ii/modules/ii/background/widgets/PinnedWidget.qml
+new file mode 100644
+index 0000000000..a60e0d9c39
+--- /dev/null
++++ b/dots/.config/quickshell/ii/modules/ii/background/widgets/PinnedWidget.qml
+@@ -0,0 +1,20 @@
++import QtQuick
++import Quickshell
++import qs
++import qs.modules.common
++import qs.modules.common.functions
++
++Item {
++    id: root
++    required property string configEntryName
++    required property int scaledScreenWidth
++    required property int scaledScreenHeight
++    
++    readonly property var configEntry: Config?.options?.background?.widgets[configEntryName]
++    
++    readonly property bool baseVisibility: GlobalStates.screenLocked ? (configEntry?.showWhenLocked ?? false) : true
++
++    x: 0
++    y: scaledScreenHeight - height
++    width: scaledScreenWidth
++}
+\ No newline at end of file
+diff --git a/dots/.config/quickshell/ii/modules/ii/background/widgets/visualizer/VisualizerWidget.qml b/dots/.config/quickshell/ii/modules/ii/background/widgets/visualizer/VisualizerWidget.qml
+new file mode 100644
+index 0000000000..f468e9696a
+--- /dev/null
++++ b/dots/.config/quickshell/ii/modules/ii/background/widgets/visualizer/VisualizerWidget.qml
+@@ -0,0 +1,246 @@
++import QtQuick
++import QtQuick.Shapes
++import qs
++import qs.services
++import qs.modules.common
++import qs.modules.common.functions as CF
++import qs.modules.common.widgets
++import qs.modules.common.widgets.widgetCanvas
++import qs.modules.ii.background.widgets
++import qs.modules.common.models.hyprland
++import Quickshell.Services.UPower
++
++PinnedWidget {
++    id: root
++
++    configEntryName: "visualizer"
++
++    property list<real> points: []
++    property color primaryColor: Appearance.colors.colPrimary
++    property bool shown: false
++
++    property var currentPowerProfile: PowerProfiles.profile
++    readonly property int autoRenderEveryXFrames: {
++        switch(PowerProfiles.profile) {
++            case 2: return 1  // Performance
++            case 1: return 2  // Balanced
++            case 0: return 4  // Power Saver
++            default: return 2
++        }
++    }
++
++    // Consolidated config properties from configEntry
++    readonly property var config: ({
++        height: configEntry?.height ?? 600,
++        targetBarWidth: configEntry?.targetBarWidth ?? 50,
++        barSpacing: configEntry?.barSpacing ?? 10,
++        barRounding: configEntry?.barRounding ?? 0.5,
++        smoothing: configEntry?.smoothing ?? 0.18,
++        dataSmoothing: configEntry?.dataSmoothing ?? 0.5,
++        opacity: configEntry?.opacity ?? 1.0,
++        mono: configEntry?.mono ?? true,
++        mode: configEntry?.mode ?? "wave",
++        waveFillOpacity: configEntry?.waveFillOpacity ?? 0.5,
++        waveBorderWidth: configEntry?.waveBorderWidth ?? 3,
++        renderEveryXFrames: (configEntry?.renderEveryXFrames ?? -1) === -1 ? (autoRenderEveryXFrames - 1) : (configEntry.renderEveryXFrames - 1)
++    })
++
++    readonly property color waveFillColor: Qt.rgba(primaryColor.r, primaryColor.g, primaryColor.b, config.waveFillOpacity)
++    property var pixelHeights: []
++
++    height: config.height
++    opacity: (shown && baseVisibility && enableAnimations.value) ? 1 : 0
++    visible: opacity > 0
++    Behavior on opacity { NumberAnimation { duration: 400; easing.type: Easing.OutCubic } }
++
++    readonly property int barCount: Math.max(1, Math.floor(width / (config.targetBarWidth + config.barSpacing)))
++    readonly property real exactWidth: (width - (config.barSpacing * (barCount - 1))) / barCount
++    
++    property real activityOpacity: 0
++    Behavior on activityOpacity { NumberAnimation { duration: 500; easing.type: Easing.OutCubic } }
++    
++    property var renderedPoints: Array(barCount).fill(0)
++
++    readonly property var targetPoints: {
++        let raw = points;
++        if (!raw || raw.length === 0) return Array(barCount).fill(0);
++        let count = barCount;
++        let mapped = new Array(count);
++        let rawLenM1 = raw.length - 1;
++
++        for (let i = 0; i < count; i++) {
++            let progress = i / (count - 1 || 1);
++            let relPos = config.mono ? (Math.abs(progress - 0.5) * 2) * rawLenM1 : progress * rawLenM1;
++            let low = Math.floor(relPos), high = Math.ceil(relPos), mix = relPos - low;
++            mapped[i] = (raw[low] * (1 - mix)) + (raw[high] * (high < raw.length ? mix : 0));
++        }
++
++        if (config.dataSmoothing <= 0) return mapped;
++        let smoothed = new Array(count);
++        let sW = config.dataSmoothing * 0.25; 
++        for (let j = 0; j < count; j++) {
++            let p = mapped[Math.max(0, j - 1)];
++            let n = mapped[Math.min(count - 1, j + 1)];
++            smoothed[j] = (p * sW) + (mapped[j] * (1.0 - 2 * sW)) + (n * sW);
++        }
++        return smoothed;
++    }
++
++    Row {
++        id: visualizerRow
++        anchors.fill: parent
++        spacing: root.config.barSpacing
++        opacity: 0
++        visible: opacity > 0
++        
++        Repeater {
++            model: root.barCount
++            delegate: Rectangle {
++                width: root.exactWidth
++                height: Math.max(2, (root.targetPoints[index] / 1000) * root.height)
++                anchors.bottom: parent.bottom
++                topLeftRadius: width * root.config.barRounding
++                topRightRadius: width * root.config.barRounding
++                bottomLeftRadius: 0
++                bottomRightRadius: 0
++                color: root.primaryColor
++                border.width: root.config.waveBorderWidth
++                border.color: root.waveFillColor
++
++                Behavior on height { NumberAnimation { duration: root.config.smoothing * 1000; easing.type: Easing.Linear } }
++            }
++        }
++    }
++
++    Canvas {
++        id: waveCanvas
++        anchors.fill: parent
++        opacity: 0
++        visible: opacity > 0
++        
++        onWidthChanged: requestPaint()
++        onHeightChanged: requestPaint()
++
++        property int frames: 0
++
++        onPaint: {
++            if (waveCanvas.frames >= config.renderEveryXFrames) {
++                waveCanvas.frames = 0;
++            }
++            else {
++                waveCanvas.frames += 1;
++                return;
++            }
++
++            var ctx = getContext("2d");
++
++            var ph = root.pixelHeights;
++            if (!ph || ph.length < 2) return;
++
++            ctx.reset();
++            let w = width; let h = height;
++            if (w <= 0 || h <= 0) return;
++
++            let step = w / (ph.length - 1);
++            ctx.beginPath();
++            ctx.moveTo(0, h);
++            ctx.lineTo(0, h - ph[0]);
++
++            for (let i = 0; i < ph.length - 1; i++) {
++                let x1 = i * step;
++                let x2 = (i + 1) * step;
++                let y1 = h - ph[i];
++                let y2 = h - ph[i + 1];
++                let cx = (x1 + x2) / 2;
++                ctx.bezierCurveTo(cx, y1, cx, y2, x2, y2);
++            }
++            ctx.lineTo(w, h);
++            ctx.closePath();
++
++            ctx.fillStyle = root.waveFillColor;
++            ctx.fill();
++            
++            if (root.config.waveBorderWidth > 0) {
++                ctx.beginPath();
++                ctx.moveTo(0, h - ph[0]);
++                for (let i = 0; i < ph.length - 1; i++) {
++                    let x1 = i * step;
++                    let x2 = (i + 1) * step;
++                    let y1 = h - ph[i];
++                    let y2 = h - ph[i + 1];
++                    let cx = (x1 + x2) / 2;
++                    ctx.bezierCurveTo(cx, y1, cx, y2, x2, y2);
++                }
++                ctx.strokeStyle = root.primaryColor;
++                ctx.lineWidth = root.config.waveBorderWidth;
++                ctx.lineCap = "round"; ctx.lineJoin = "round";
++                ctx.stroke();
++            }
++        }
++    }
++
++    states: [
++        State {
++            name: "bars"
++            when: root.config.mode === "bars"
++            PropertyChanges { target: visualizerRow; opacity: root.config.opacity * root.activityOpacity }
++            PropertyChanges { target: waveCanvas; opacity: 0 }
++        },
++        State {
++            name: "wave"
++            when: root.config.mode === "wave"
++            PropertyChanges { target: visualizerRow; opacity: 0 }
++            PropertyChanges { target: waveCanvas; opacity: root.config.opacity * root.activityOpacity }
++        }
++    ]
++
++    transitions: Transition {
++        NumberAnimation { properties: "opacity"; duration: 400; easing.type: Easing.InOutQuad }
++    }
++
++    FrameAnimation {
++        running: (root.activityOpacity > 0 || silenceTimer.running) && (visualizerRow.visible || waveCanvas.visible)
++        onTriggered: {
++            let target = root.targetPoints;
++            let current = root.renderedPoints;
++            let h = root.height;
++            let count = target.length;
++            
++            if (current.length !== count) {
++                root.renderedPoints = target;
++                root.pixelHeights = target.map(p => (p / 1000) * h);
++                if (waveCanvas.visible) waveCanvas.requestPaint();
++                return;
++            }
++
++            let lerpFactor = Math.min(1.0, (frameTime * 1000) / Math.max(1, root.config.smoothing * 1000));
++            let nextPoints = new Array(count);
++            let nextPixels = new Array(count);
++
++            for (let i = 0; i < count; i++) {
++                let val = current[i] + (target[i] - current[i]) * lerpFactor;
++                nextPoints[i] = val;
++                nextPixels[i] = (val / 1000) * h;
++            }
++            
++            root.renderedPoints = nextPoints;
++            root.pixelHeights = nextPixels;
++
++            if (waveCanvas.visible) waveCanvas.requestPaint();
++        }
++    }
++
++    Timer { id: silenceTimer; interval: 1000; onTriggered: root.activityOpacity = 0 }
++
++    onPointsChanged: {
++        if (points.some(p => p > 0)) {
++            root.activityOpacity = 1.0;
++            silenceTimer.restart();
++        }
++    }
++    
++    HyprlandConfigOption {
++        id: enableAnimations
++        key: "animations:enabled"
++    }
++}
+\ No newline at end of file
+diff --git a/dots/.config/quickshell/ii/modules/settings/BackgroundConfig.qml b/dots/.config/quickshell/ii/modules/settings/BackgroundConfig.qml
+index 680421f031..dac88c7327 100644
+--- a/dots/.config/quickshell/ii/modules/settings/BackgroundConfig.qml
++++ b/dots/.config/quickshell/ii/modules/settings/BackgroundConfig.qml
+@@ -614,4 +614,280 @@ ContentPage {
+             }
+         }
+     }
+-}
++
++    ContentSection {
++        id: visualizerSection
++        icon: "equalizer"
++        title: Translation.tr("Widget: Visualizer")
++        
++        readonly property bool isWave: Config.options.background.widgets.visualizer.mode === "wave"
++
++        ConfigRow {
++            Layout.fillWidth: true
++
++            ConfigSwitch {
++                Layout.fillWidth: false
++                buttonIcon: "check"
++                text: Translation.tr("Enable")
++                checked: Config.options.background.widgets.visualizer.enable
++                onCheckedChanged: Config.options.background.widgets.visualizer.enable = checked
++            }
++            Item { Layout.fillWidth: true }
++            ContentSubsection {
++                title: Translation.tr("Visualizer style")
++                Layout.fillWidth: false
++                visible: Config.options.background.widgets.visualizer.enable
++                ConfigSelectionArray {
++                    Layout.fillWidth: false
++                    currentValue: Config.options.background.widgets.visualizer.mode
++                    onSelected: newValue => {
++                        Config.options.background.widgets.visualizer.mode = newValue;
++                    }
++                    options: [
++                        { displayName: Translation.tr("Bars"), icon: "equalizer", value: "bars" },
++                        { displayName: Translation.tr("Wave"), icon: "airwave", value: "wave" }
++                    ]
++                }
++            }
++        }
++
++        ColumnLayout {
++            Layout.fillWidth: true
++            visible: Config.options.background.widgets.visualizer.enable
++            spacing: 16
++
++            ContentSubsection {
++                title: Translation.tr("Visibility")
++                
++                ConfigRow {
++                    uniform: true
++                    ConfigSwitch {
++                        buttonIcon: "crop_free"
++                        text: Translation.tr("Hide when fullscreen/maximized")
++                        checked: Config.options.background.widgets.visualizer.hideWhenFullscreen
++                        onCheckedChanged: {
++                            Config.options.background.widgets.visualizer.hideWhenFullscreen = checked
++                            if (!checked) {
++                                Config.options.background.widgets.visualizer.hideWhenCovered = false
++                            }
++                        }
++                        StyledToolTip {
++                            text: Translation.tr("Hide the visualizer when a window is in fullscreen or maximized mode. (Recommended)")
++                        }
++                    }
++                }
++
++                ConfigRow {
++                    uniform: true
++                    ConfigSwitch {
++                        id: hideWhenCoveredSwitch
++                        buttonIcon: "lock"
++                        visible: Config.options.background.widgets.visualizer.hideWhenFullscreen
++                        text: Translation.tr("Also hide when covered")
++                        checked: Config.options.background.widgets.visualizer.hideWhenCovered
++                        onCheckedChanged: {
++                            Config.options.background.widgets.visualizer.hideWhenCovered = checked
++                        }
++                        StyledToolTip {
++                            text: Translation.tr("Hide the visualizer when covered by tiled windows.")
++                        }
++                    }
++                    
++                    // Ensure that "hide when covered" is visibly off when hide when fullscreen is turned off
++                    Binding {
++                        target: hideWhenCoveredSwitch
++                        property: "checked"
++                        value: Config.options.background.widgets.visualizer.hideWhenCovered
++                        when: !hideWhenCoveredSwitch.pressed
++                    }
++                }
++            }
++
++            ContentSubsection {
++                visible: Config.options.background.widgets.visualizer.mode === "wave"
++                title: Translation.tr("Performance mode")
++                tooltip: Translation.tr("Note: Auto mode requires 'power-profiles-daemon' (Arch) package")
++
++                ConfigSelectionArray {
++                    currentValue: Config.options.background.widgets.visualizer.renderEveryXFrames
++                    onSelected: newValue => {
++                        Config.options.background.widgets.visualizer.renderEveryXFrames = newValue;
++                    }
++                    options: [
++                        {
++                            displayName: Translation.tr("Auto"),
++                            icon: "auto_fix_high",
++                            value: -1,
++                        },
++                        {
++                            displayName: Translation.tr("Smooth mode"),
++                            icon: "speed",
++                            value: 1
++                        },
++                        {
++                            displayName: Translation.tr("Balanced mode"),
++                            icon: "balance",
++                            value: 2
++                        },
++                        {
++                            displayName: Translation.tr("Efficiency mode"),
++                            icon: "energy_savings_leaf",
++                            value: 4
++                        }
++                    ]
++                }
++            }
++
++            ContentSubsection {
++                title: Translation.tr("Behavior & Processing")
++                
++                ConfigRow {
++                    uniform: true
++                    ConfigSwitch {
++                        buttonIcon: "lock"
++                        text: Translation.tr("Show when locked")
++                        checked: Config.options.background.widgets.visualizer.showWhenLocked
++                        onCheckedChanged: {
++                            Config.options.background.widgets.visualizer.showWhenLocked = checked
++                        }
++                    }
++                    ConfigSwitch {
++                        buttonIcon: "flip"
++                        text: Translation.tr("Mono / Mirrored")
++                        checked: Config.options.background.widgets.visualizer.mono
++                        onCheckedChanged: {
++                            Config.options.background.widgets.visualizer.mono = checked
++                        }
++                    }
++                }
++
++                ConfigSlider {
++                    buttonIcon: "waves"
++                    text: Translation.tr("Data Averaging")
++                    value: (Config.options.background.widgets.visualizer.dataSmoothing ?? 0.5) * 100
++                    from: 0; to: 100
++                    stopIndicatorValues: [50]
++                    onValueChanged: {
++                        Config.options.background.widgets.visualizer.dataSmoothing = value / 100
++                    }
++                }
++            }
++
++            ContentSubsection {
++                title: Translation.tr("Sizing & Resolution")
++
++                ConfigRow {
++                    uniform: true
++                    ConfigSpinBox {
++                        icon: "height"
++                        text: Translation.tr("Max Height")
++                        value: Config.options.background.widgets.visualizer.height
++                        from: 60; to: 1080; stepSize: 10
++                        onValueChanged: {
++                            Config.options.background.widgets.visualizer.height = value
++                        }
++                    }
++                    ConfigSpinBox {
++                        icon: "view_column"
++                        text: visualizerSection.isWave ? Translation.tr("Point Width") : Translation.tr("Bar Width")
++                        value: Config.options.background.widgets.visualizer.targetBarWidth
++                        from: 1; to: 200
++                        onValueChanged: {
++                            Config.options.background.widgets.visualizer.targetBarWidth = value
++                        }
++                    }
++                }
++
++                ConfigRow {
++                    uniform: true
++                    ConfigSpinBox {
++                        icon: "space_bar"
++                        text: visualizerSection.isWave ? Translation.tr("Point Gap") : Translation.tr("Bar Gap")
++                        value: Config.options.background.widgets.visualizer.barSpacing
++                        from: 0; to: 100
++                        onValueChanged: {
++                            Config.options.background.widgets.visualizer.barSpacing = value
++                        }
++                    }
++                    ConfigSpinBox {
++                        icon: "line_weight"
++                        text: visualizerSection.isWave ? Translation.tr("Line Thickness") : Translation.tr("Border Width")
++                        value: Config.options.background.widgets.visualizer.waveBorderWidth
++                        from: 0; to: 20
++                        onValueChanged: {
++                            Config.options.background.widgets.visualizer.waveBorderWidth = value
++                        }
++                    }
++                }
++            }
++
++            ContentSubsection {
++                title: Translation.tr("Appearance")
++
++                ConfigRow {
++                    uniform: true
++                    ConfigSlider {
++                        buttonIcon: "opacity"
++                        text: Translation.tr("Master Opacity")
++                        value: Config.options.background.widgets.visualizer.opacity * 100
++                        from: 0; to: 100
++                        stopIndicatorValues: [50]
++                        onValueChanged: {
++                            Config.options.background.widgets.visualizer.opacity = value / 100
++                        }
++                    }
++                }
++
++                ConfigRow {
++                    uniform: true
++                    ConfigSlider {
++                        buttonIcon: "speed"
++                        text: Translation.tr("Smoothing")
++                        value: Config.options.background.widgets.visualizer.smoothing * 100
++                        from: 0; to: 20
++                        stopIndicatorValues: [5]
++                        onValueChanged: {
++                            Config.options.background.widgets.visualizer.smoothing = value / 100
++                        }
++                    }
++                }
++
++                ConfigSlider {
++                    visible: visualizerSection.isWave
++                    buttonIcon: "format_color_fill"
++                    text: Translation.tr("Fill Opacity")
++                    value: Config.options.background.widgets.visualizer.waveFillOpacity * 100
++                    from: 0; to: 100
++                    stopIndicatorValues: [50]
++                    onValueChanged: {
++                        Config.options.background.widgets.visualizer.waveFillOpacity = value / 100
++                    }
++                }
++
++                ConfigSlider {
++                    visible: !visualizerSection.isWave
++                    buttonIcon: "format_color_reset"
++                    text: Translation.tr("Border Opacity")
++                    value: Config.options.background.widgets.visualizer.waveFillOpacity * 100
++                    from: 0; to: 100
++                    stopIndicatorValues: [50]
++                    onValueChanged: {
++                        Config.options.background.widgets.visualizer.waveFillOpacity = value / 100
++                    }
++                }
++
++                ConfigSlider {
++                    visible: !visualizerSection.isWave
++                    buttonIcon: "rounded_corner"
++                    text: Translation.tr("Bar Roundness")
++                    value: Config.options.background.widgets.visualizer.barRounding * 100
++                    from: 0; to: 50
++                    stopIndicatorValues: [25]
++                    onValueChanged: {
++                        Config.options.background.widgets.visualizer.barRounding = value / 100
++                    }
++                }
++            }
++        }
++    }
++}
+\ No newline at end of file

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import Quickshell
+import Quickshell.Io
 import Quickshell.Wayland
 import qs.modules.desktop
 import qs.modules.services
@@ -10,9 +11,12 @@ import qs.config
 PanelWindow {
     id: desktop
 
+    property var visualizerPoints: []
+    property bool cavaAvailable: false
     property int barSize: Config.showBackground ? 44 : 40
     property int bottomTextMargin: 32
     property string barPosition: ["top", "bottom", "left", "right"].includes(Config.bar.position) ? Config.bar.position : "top"
+    readonly property bool visualizerEnabled: Config.desktop.visualizer.enabled ?? false
 
     anchors {
         top: true
@@ -28,12 +32,63 @@ PanelWindow {
     WlrLayershell.keyboardFocus: WlrKeyboardFocus.None
     exclusionMode: ExclusionMode.Ignore
 
-    visible: Config.desktop.enabled
+    visible: (Config.desktop.enabled ?? false) || visualizerEnabled
 
     Component.onCompleted: {
         DesktopService.initialize();
         DesktopService.maxRowsHint = Qt.binding(() => iconContainer.maxRows);
         DesktopService.maxColumnsHint = Qt.binding(() => iconContainer.maxColumns);
+    }
+
+    Process {
+        id: cavaCheckProcess
+        command: ["which", "cava"]
+        running: true
+        onExited: (exitCode) => {
+            desktop.cavaAvailable = exitCode === 0;
+        }
+    }
+
+    Process {
+        id: cavaProcess
+        command: ["cava", "-p", Qt.resolvedUrl("../../scripts/cava/raw_output_config.txt").toString().replace("file://", "")]
+        running: desktop.visualizerEnabled && desktop.cavaAvailable
+
+        onRunningChanged: {
+            if (!running) {
+                desktop.visualizerPoints = [];
+            }
+        }
+
+        stdout: SplitParser {
+            onRead: data => {
+                const points = data.split(";").map(value => parseFloat(value.trim())).filter(value => !isNaN(value));
+                if (points.length > 0) {
+                    desktop.visualizerPoints = points;
+                }
+            }
+        }
+    }
+
+    DesktopVisualizer {
+        anchors.left: parent.left
+        anchors.right: parent.right
+        anchors.bottom: parent.bottom
+        anchors.leftMargin: 24
+        anchors.rightMargin: 24
+        anchors.bottomMargin: 24
+        height: Math.max(48, Config.desktop.visualizer.height ?? 220)
+        visible: desktop.visualizerEnabled && desktop.cavaAvailable && desktop.visualizerPoints.length > 0
+
+        points: desktop.visualizerPoints
+        visualizerOpacity: Config.desktop.visualizer.opacity ?? 0.9
+        barWidth: Config.desktop.visualizer.barWidth ?? 18
+        barSpacing: Config.desktop.visualizer.barSpacing ?? 10
+        barRadius: Config.desktop.visualizer.barRadius ?? 10
+        maxValue: Config.desktop.visualizer.maxValue ?? 1000
+        smoothing: Config.desktop.visualizer.smoothing ?? 0.35
+        mirror: Config.desktop.visualizer.mirror ?? true
+        barColor: Config.resolveColor(Config.desktop.visualizer.color ?? "primary")
     }
 
     Item {
@@ -49,6 +104,7 @@ PanelWindow {
         property int cellWidth: cellHeight
         property int maxRows: Math.floor(height / cellHeight)
         property int maxColumns: Math.floor(width / cellWidth)
+        visible: Config.desktop.enabled ?? false
 
         Repeater {
             model: DesktopService.items
@@ -235,7 +291,7 @@ PanelWindow {
         height: 60
         color: Qt.rgba(0, 0, 0, 0.7)
         radius: Styling.radius(0)
-        visible: !DesktopService.initialLoadComplete
+        visible: (Config.desktop.enabled ?? false) && !DesktopService.initialLoadComplete
 
         Text {
             anchors.centerIn: parent
