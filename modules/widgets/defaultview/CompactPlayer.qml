@@ -124,6 +124,21 @@ Item {
         }
     }
 
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.NoButton
+        onWheel: wheel => {
+            if (!compactPlayer.player) {
+                wheel.accepted = false;
+                return;
+            }
+            if (wheel.angleDelta.y > 0)
+                Audio.incrementVolume();
+            else if (wheel.angleDelta.y < 0)
+                Audio.decrementVolume();
+        }
+    }
+
     StyledRect {
         variant: "common"
         anchors.fill: parent
@@ -667,5 +682,6 @@ Item {
                 }
             }
         }
+
     }
 }

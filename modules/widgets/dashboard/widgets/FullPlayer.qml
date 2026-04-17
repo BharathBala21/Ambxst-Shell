@@ -667,4 +667,15 @@ StyledRect {
             return Icons.telegram;
         return Icons.player;
     }
+
+    MouseArea {
+        anchors.fill: parent
+        acceptedButtons: Qt.NoButton
+        onWheel: wheel => {
+            if (wheel.angleDelta.y > 0)
+                Audio.incrementVolume();
+            else if (wheel.angleDelta.y < 0)
+                Audio.decrementVolume();
+        }
+    }
 }
