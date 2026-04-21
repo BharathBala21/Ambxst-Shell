@@ -1,0 +1,108 @@
+/* obsidian-logbook-theme.css 
+   Updated with Dark Mode support.
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Patrick+Hand&display=swap');
+
+/* Default (Light) Variables */
+body {
+    --text-normal: #2c3e50;
+    --text-muted: #7f8c8d;
+    --text-faint: #bdc3c7;
+    --background-primary: #fdfbf7;
+    --background-secondary: #f4f4f4;
+    --text-accent: #e74c3c;
+    --text-selection: rgba(231, 76, 60, 0.99);
+    --text-lol:#006eff;
+}
+
+/* Dark Mode Variables */
+.theme-dark {
+    --text-normal: #dcdcdc;
+    --text-muted: #95a5a6;
+    --text-faint: #5f6f70;
+    --background-primary: #1f1e1a;
+    --background-secondary: #2c2b26;
+    --text-accent: #ff6b6b;
+    --text-selection: rgba(255, 107, 107, 0.4);
+    --highlight-bg: rgba(241, 196, 15, 0.5);
+    --hr-color: #ffffff;
+    /* --text-lol:#07ffff; */
+        /* --text-lol:#07ffff; */
+        
+    --text-lol:#006eff;
+
+}
+
+/* Base Typography */
+.markdown-preview-view, .cm-s-obsidian {
+    font-family: 'Courier Prime', monospace !important;
+    font-size: 20px !important;
+    line-height: 32px !important;
+    color: var(--text-normal) !important;
+}
+
+/* Headings */
+.markdown-preview-view h1, .cm-s-obsidian .HyperMD-header-1 {
+    font-family: 'Patrick Hand', cursive !important;
+    font-size: 2.2em !important;
+    color: var(--text-normal) !important;
+    border-bottom: 2px solid var(--text-normal) !important;
+}
+
+.markdown-preview-view h2, .cm-s-obsidian .HyperMD-header-2 {
+    font-family: 'Patrick Hand', cursive !important;
+    font-size: 1.8em !important;
+    color: var(--text-accent) !important;
+}
+
+.markdown-preview-view h3, .cm-s-obsidian .HyperMD-header-3 {
+    font-family: 'Patrick Hand', cursive !important;
+    font-size: 1.6em !important;
+    /* color: var(--text-normal) !important; */
+    color: var(--text-lol) !important;
+    font-weight: bold !important;
+}
+
+/* Blockquote */
+.markdown-preview-view blockquote, .cm-s-obsidian .HyperMD-quote {
+    border-left: 4px solid var(--text-accent) !important;
+    color: var(--text-muted) !important;
+    font-style: italic !important;
+    background: rgba(0, 0, 0, 0.1) !important;
+    padding-left: 15px !important;
+}
+
+/* Strikethrough */
+.markdown-preview-view s, .markdown-preview-view del, .cm-s-obsidian .cm-strikethrough {
+    text-decoration: line-through !important;
+    text-decoration-color: var(--text-accent) !important;
+}
+
+/* Bold/Italic */
+.markdown-preview-view strong, .cm-s-obsidian .cm-strong { font-weight: 700 !important; color: var(--text-normal) !important; }
+.markdown-preview-view em, .cm-s-obsidian .cm-em { font-style: italic !important; color: var(--text-muted) !important; }
+
+/* Code Blocks */
+.markdown-preview-view pre, .markdown-preview-view code, .cm-s-obsidian .HyperMD-codeblock, .cm-s-obsidian .cm-inline-code {
+    background-color: var(--background-secondary) !important;
+    font-family: 'Courier Prime', monospace !important;
+    border: 1px solid var(--text-faint) !important;
+    color: var(--text-normal) !important;
+}
+
+/* Highlight (Marker) */
+.markdown-preview-view mark, .cm-s-obsidian .cm-highlight {
+    background-color: var(--highlight-bg) !important;
+    color: #ffffff !important; /* Adjust text color if needed */
+    padding: 0 2px;
+}
+
+hr {
+    border: 0;
+    border-top: 1px solid var(--hr-color) !important;
+    margin: 20px 0;
+}
+
+/* Checkboxes */
+input[type=checkbox] { accent-color: var(--text-accent) !important; }

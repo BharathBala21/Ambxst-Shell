@@ -1,0 +1,120 @@
+/* 
+  obsidian-logbook-theme.css 
+  A custom Obsidian snippet to mirror the Pirate LogBook aesthetic.
+*/
+
+@import url('https://fonts.googleapis.com/css2?family=Courier+Prime:wght@400;700&family=Patrick+Hand&display=swap');
+
+/* Override Obsidian core variables */
+body {
+    --text-normal: #2c3e50;
+    --text-muted: #7f8c8d;
+    --text-faint: #bdc3c7;
+    --background-primary: #fdfbf7;
+    --background-primary-alt: #fdfbf7;
+    --background-secondary: #f4f4f4;
+    --font-text-theme: 'Courier Prime', monospace;
+    --font-monospace-theme: 'Courier Prime', monospace;
+    --font-editor-theme: 'Courier Prime', monospace;
+    --text-accent: #e74c3c;
+    --text-accent-hover: #c0392b;
+    --text-selection: rgba(231, 76, 60, 0.99); /* #e74c3c */
+}
+
+/* Base background with dot pattern */
+/* .app-container, .workspace-leaf-content, .view-content, .markdown-preview-view, .markdown-source-view, .cm-scroller {
+    background-color: #fdfbf7 !important;
+} */
+
+/* Mouse Text Selection */
+::selection, .cm-selectionBackground, .theme-light .cm-selectionBackground, .theme-dark .cm-selectionBackground {
+    background-color: var(--text-selection) !important;
+    color: white !important;
+}
+
+
+
+/* Add the 20x20 dotted journal background to the main editing and reading areas */
+/* .markdown-preview-view, .cm-scroller {
+    background-image: radial-gradient(#bdc3c7 1px, transparent 1px) !important;
+    background-size: 20px 20px !important;
+} */
+
+/* Base Typography */
+.markdown-preview-view, .cm-s-obsidian {
+    font-family: 'Courier Prime', monospace !important;
+    font-size: 20px !important;
+    line-height: 32px !important;
+    color: #2c3e50 !important;
+}
+
+/* H1: Big Heading */
+.markdown-preview-view h1, .cm-s-obsidian .HyperMD-header-1 {
+    font-family: 'Patrick Hand', cursive !important;
+    font-size: 2.2em !important;
+    color: #2c3e50 !important;
+    border-bottom: 2px solid #2c3e50 !important;
+}
+
+/* H2: Sub Heading (Red Pen) */
+.markdown-preview-view h2, .cm-s-obsidian .HyperMD-header-2 {
+    font-family: 'Patrick Hand', cursive !important;
+    font-size: 1.8em !important;
+    color: #e74c3c !important;
+}
+
+/* H3: Small Heading */
+.markdown-preview-view h3, .cm-s-obsidian .HyperMD-header-3 {
+    font-family: 'Patrick Hand', cursive !important;
+    font-size: 1.4em !important;
+    color: #2c3e50 !important;
+    font-weight: bold !important;
+}
+
+/* Blockquote */
+.markdown-preview-view blockquote, .cm-s-obsidian .HyperMD-quote {
+    border-left: 4px solid #e74c3c !important;
+    color: #7f8c8d !important;
+    font-style: italic !important;
+    background: rgba(0, 0, 0, 0.02) !important;
+    padding-left: 15px !important;
+}
+
+/* Strikethrough (Red correction line) */
+.markdown-preview-view s, .markdown-preview-view del, .cm-s-obsidian .cm-strikethrough {
+    text-decoration: line-through !important;
+    text-decoration-color: #e74c3c !important;
+    text-decoration-thickness: 2px !important;
+    color: #7f8c8d !important;
+}
+
+/* Bold */
+.markdown-preview-view strong, .markdown-preview-view b, .cm-s-obsidian .cm-strong {
+    font-weight: 700 !important;
+    color: #000 !important;
+}
+
+/* Italic */
+.markdown-preview-view em, .markdown-preview-view i, .cm-s-obsidian .cm-em {
+    font-style: italic !important;
+    color: #555 !important;
+}
+
+/* Checkboxes */
+input[type=checkbox] {
+    accent-color: #e74c3c !important;
+}
+
+/* Highlight (Yellow marker) */
+.markdown-preview-view mark, .cm-s-obsidian .cm-highlight {
+    background-color: #fff59d !important;
+    color: #2c3e50 !important;
+}
+
+/* Code Blocks */
+.markdown-preview-view pre, .markdown-preview-view code, .cm-s-obsidian .HyperMD-codeblock, .cm-s-obsidian .cm-inline-code {
+    background-color: #f4f4f4 !important;
+    font-family: 'Courier Prime', monospace !important;
+    border: 1px solid #ddd !important;
+}
+
